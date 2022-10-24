@@ -1,0 +1,18 @@
+# This is a Tillotson parameters file for
+# STEEL (Nesterenko,2001,p177;Maurel,2020)
+[Tillostson]
+    Rho0    = 7.8e3
+    BulkA   = 1.17e11
+    BulkB   = 0.55e11
+    E0    = 17.5e6
+    Ta   = 0.55
+    Tb   = 0.62
+    Alpha = 5.0
+    Beta  = 5.0
+    Eiv   = 2.40e6
+    Ecv   = 8.67e6
+
+[ColdEnergy]
+    Tref    = 293.0
+    Cv      = 4.4e2
+    RhoStep = 3001

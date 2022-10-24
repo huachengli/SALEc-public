@@ -1,0 +1,110 @@
+# This is a input example of SALEc written by huachengli
+# Case Insensitive, uSINg [m,kg,s]
+# comment lines begin with "#/-* at first character
+[processor]
+    npgx    = 4 /* number of processors in X direction */
+    npgy    = 4
+    npgz    = 4
+    noffset = 2 /* only for debug; not change */
+
+[mesh]
+    dx  = 800.0 /*spacing of grid in X direction */
+    dy  = 800.0
+    dz  = 800.0
+    npx = 32  /* number of vertexes in X direction */
+    npy = 32
+    npz = 32
+    ext = on /* extension of grid : GRIDEXT*/
+    ex  = [1.05,25,25] /*GRIDH*/
+    ey  = [1.05,25,25] /*GRIDV*/
+    ez  = [1.05,30,20]
+    O   = [0.5,0.5,0.62]
+
+[projectile]
+    material = dunite_
+    radiu    = 7200.0
+    center   = [0.0,0.0,7200.0] // Cartesian[x,y,z]
+    velocity = [-1.2e4,0.0,0.0] // Spherical[r,theta(degree),phi(degree)]
+    damage   = [const,1.0]
+    pressure = [const,1.0]
+    temperature = [const,293.0]
+    density = [derived,]
+
+[target]
+    number   = 1
+    toplevel = 0.0
+    material = [dunite_]
+    depth    = [200.0e3]
+    damage    = [const,0.0]
+    temperature = [const,293]
+    pressure    = [derived,RK3]
+
+[condition]
+    gravity     = [const,0.0]
+
+[boundary]
+    front = outflow
+    back  = outflow
+    bottom= freeslip
+    top   = outflow
+    left  = outflow
+    right = outflow
+
+[numerical]
+    ARTVIS  = 0.4  /*quad*/
+    ARTVIS2 = 0.5  /*linear*/
+    CISSAMK = 1.0
+    Courant = 0.25
+    MaxVelocity = 2.0e4
+    damping = on
+    LAMBDA  = [8,0.05]
+
+[cycle]
+    dt0        = 1.0e-3
+    maxdt      = 1.0e-2
+    time0      = 0.0     /*start time*/
+    time1      = 20.0  /* end  time*/
+    maxstep    = 4000  /*maximum step*/
+
+[output]
+    prefix    = ParaTest
+    format    = binary
+    time      = 5.0      /* the time interval to output */
+    init      = 0        /* the 0-init timestep will be output */
+
+[material]
+    nm      = 3
+    // the first material is reserved for vacuum, cannot be changed !!!
+    postfix = [null   ,  aneos,  aneos]
+    name    = [vacuum_,granit2,dunite_]
+
+    // [shear] strength model description
+    yint0   = [,1.00e7 ,1.00e7]
+    yintfri = [,2.00   ,1.20  ]
+    yintlim = [,2.50e9 ,3.50e9]
+    ydam0   = [,1.0e4  ,1.00e4]
+    ydamfri = [,0.60   ,0.60]
+    ydamlim = [,2.50e9 ,3.50e9]
+    yshear  = [,SimpleRock,SimpleRock]
+
+    // damage model
+    IvanA   = [,    1.0e-4 , 1.0e-4]
+    IvanB   = [,    1.0e-11,1.0e-11]
+    IvanC   = [,      3.0e8,  3.0e8]
+    damage  = [,SimpleShear,SimpleShear]
+
+    // tensile strength model
+    yten0   = [,3.0e8,3.0e8]
+    ytens   = [,SimpleTensile,SimpleTensile]
+
+    // other
+    Poisson = [,0.30,0.25]
+
+    // ACFL Block Model parameter
+    BlockSize  = [,7200.0 ,7200.0]
+    GammaEta   = [,8.00e-3,8.00e-3]
+    GammaBeta  = [,1.15e2 ,1.15e-2]
+    Toff       = [,16.0   ,16.0]
+    Cvib       = [,0.1    ,0.1]
+    Vibmax     = [,200.0  ,200.0]
+    Pvlim      = [,2.5e10 ,2.5e10]

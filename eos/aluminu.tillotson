@@ -1,0 +1,18 @@
+# This is a Tillotson parameters file for
+# ALUMINUM
+[Tillostson]
+    Rho0  = 2.7e3
+    BulkA   = 7.52e10
+    BulkB   = 6.50e10
+    E0    = 5.0e6
+    Ta   = 0.50
+    Tb   = 1.63
+    Alpha = 5.0
+    Beta  = 5.0
+    Eiv   = 3.00e6
+    Ecv   = 1.39e7
+
+[ColdEnergy]
+    Tref    = 293.0
+    Cv      = 8.96e2
+    RhoStep = 3001

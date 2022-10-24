@@ -1,0 +1,115 @@
+# This is a input example of SALEc written by huachengli
+# Case Insensitive, uSINg [m,kg,s]
+# comment lines begin with "#/-* at first character
+[processor]
+    npgx    = 6 /* number of processors in X direction */
+    npgy    = 6
+    npgz    = 6
+    noffset = 2 /* only for debug; not change */
+
+[mesh]
+    dx  = 1.00e-4 /*spacing of grid in X direction */
+    dy  = 1.00e-4
+    dz  = 1.00e-4
+    npx = 32  /* number of vertexes in X direction */
+    npy = 32
+    npz = 32
+    ext = on /* extension of grid : GRIDEXT*/
+    ex  = [1.05,25,25] /*GRIDH*/
+    ey  = [1.05,25,25] /*GRIDV*/
+    ez  = [1.05,30,20]
+    O   = [0.5,0.5,0.7]
+
+[projectile]
+    material = steel__
+    radiu    = 1.00e-3
+    center   = [0.0,0.0,1.00e-3] // Cartesian[x,y,z]
+    velocity = [-5.5e3,0.0,0.0] // Spherical[r,theta(degree),phi(degree)]
+    damage   = [const,0.0]
+    pressure = [const,1.0]
+    temperature = [const,293.0]
+    density = [derived,]
+
+[target]
+    number    = 1
+    toplevel  = 0.0
+    material  = [granit2]
+    depth     = [5.0e-2]
+    damage    = [const,0.0]
+    temperature = [const,293.0]
+    pressure    = [derived,RK3]
+
+[condition]
+    gravity     = [const,-9.8]
+
+[boundary]
+    front = outflow
+    back  = outflow
+    bottom= freeslip
+    top   = outflow
+    left  = outflow
+    right = outflow
+
+[numerical]
+    ARTVIS  = 1.0  /*quad*/
+    ARTVIS2 = 0.5  /*linear*/
+    CISSAMK = 1.0
+    Courant = 0.25
+    MaxVelocity = 2.0e4
+    damping = off
+    LAMBDA  = [8,0.05]
+
+[cycle]
+    dt0        = 2.0e-9
+    maxdt      = 2.0e-8
+    time0      = 0.0      /*start time*/
+    time1      = 8.01e-5  /* end  time*/
+    maxstep    = 10000     /*maximum step*/
+
+[output]
+    prefix    = Al1100Test
+    format    = binary
+    time      = 2.0e-6   /* the time interval to output */
+    init      = 0        /* the 0-init timestep will be output */
+
+[material]
+    nm      = 2
+    // the first material is reserved for vacuum, cannot be changed !!!
+    postfix = [null   ,  tillotson, aneos]
+    name    = [vacuum_,    steel__, granit2]
+
+    // other
+    Poisson = [,0.30,0.30]
+    yshear  = [,JohnsonCook2,SimpleRock]
+
+    // ACFL Block Model parameter
+    Toff       = [,-16.0  ,-16.0]
+
+    yint0   = [,,1.00e7 ]
+    yintfri = [,,2.00   ]
+    yintlim = [,,2.50e9 ]
+    ydam0   = [,,1.0e4  ]
+    ydamfri = [,,0.60   ]
+    ydamlim = [,,2.50e9 ]
+
+    // damage model
+    IvanA   = [, ,   1.0e-4 ]
+    IvanB   = [, ,   1.0e-11]
+    IvanC   = [, ,     3.0e8]
+    damage  = [,SimpleShear,SimpleShear]
+    
+    
+    // Johson-Cook strength model
+    JcA = [, 1.75e8 ,]
+    JcB = [, 3.80e8 ,]
+    JcN = [, 0.32,]
+
+    JcC = [, 0.00,]
+    JcM = [, 0.55,]
+    JcTref = [, 293.0,]
+
+    // Thermal parameters
+    SimonA   = [, 2.425e10,]
+    SimonC   = [, 2.111,]
+    SimonT0  = [, 1.811e3,]
+    OhnakaXi = [,1.2,]
