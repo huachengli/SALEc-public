@@ -1,7 +1,11 @@
 ### SALEc
+
 A implement of SALE algorithm for Crater Formation
 
+This code have been used in Huacheng Li, Zongyu Yue, Yangting Lin, Kaichang Di, Nan Zhang, Jianzhong Liu, Olivine origination in lunar Das crater through three-dimensional numerical simulation, Icarus, 2022 (http://dx.doi.org/10.1016/j.icarus.2022.115333). We recommend authors cite this research in published works.
+
 #### Get Start
+
 1.1 Compile
 
 ```bash
@@ -39,9 +43,8 @@ Using [ParaView](https://www.paraview.org/) to open the *.vtm file in pdata.
 
 #### More Information
 
-See the document in doc dir
+- document will be added in future
 
 #### Author
 
 - Li Huacheng, huacheng_li@pku.edu.cn
-
