@@ -27,7 +27,7 @@ cd ..
 mkdir work
 cd work
 cp ../build/SALEc .
-cp ../SALEc.inp .
+cp ../SALEc_Chicxulub.inp ./SALEc.inp # chicxulub is a Rock-impact benchmark
 # link the EoS file to working directory, make data file and run SALEc
 ln -s ../eos ./eos
 mkdir pdata
