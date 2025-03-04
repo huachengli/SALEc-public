@@ -1,5 +1,5 @@
 ### SALEc: 用于撞击坑数值模拟实现的简化任意拉格朗日-欧拉法 [en](README_en.md)
-SALEc是基于任意拉格朗日-欧拉法(Hirt et al., 1974; Amsden, 1980)开发的超高速撞击模拟程序，它可以求解多种物质的数值模型，其中网格内边界建立的算法包括几何法(例如Benson, 2002)和代数法(例如Ubbink and Issa, 1999)，并且使用了MPI并行算法以提高计算效率。SALEc实现了多种本构方程，以及Tillotson状态方程(Tillotson, 1962)和ANEOS状态方程(Thompson and Lauson, 1972)。为了考虑温度和破裂对强度的影响，SALEc采用了与iSALE-2D一致的模型，包括热软化模型(Ohnaka, 1995)和破裂模型(Melosh et al., 1992; Ivanov et al., 1997; Collins et al., 2004)；为了模拟大型撞击坑的垮塌，SALEc还考虑了声波液化模型(Melosh et al., 1979; Melosh and Ivanov, 1999; Collins et al., 2016)，这部分与iSALE-2D也基本一致。
+SALEc是基于任意拉格朗日-欧拉法(Hirt et al., 1974; Amsden, 1980)开发的超高速撞击模拟程序。SALEc采用了许多和[iSALE-2D](https://isale-code.github.io/)类似的算法。一些模块的实现受到了iSALE-2D的启发。它可以求解多种物质的数值模型，其中网格内边界建立的算法包括几何法(例如Benson, 2002)和代数法(例如Ubbink and Issa, 1999)，并且使用了MPI并行算法以提高计算效率。SALEc实现了多种本构方程，以及Tillotson状态方程(Tillotson, 1962)和ANEOS状态方程(Thompson and Lauson, 1972)。为了考虑温度和破裂对强度的影响，SALEc采用了与iSALE-2D相同的模型，包括热软化模型(Ohnaka, 1995)和破裂模型(Melosh et al., 1992; Ivanov et al., 1997; Collins et al., 2004)；为了模拟大型撞击坑的垮塌，SALEc还考虑了声波液化模型(Melosh et al., 1979; Melosh and Ivanov, 1999; Collins et al., 2016)，这部分与iSALE-2D也基本相同。
 
 代码已经在Huacheng Li, Zongyu Yue, Yangting Lin, Kaichang Di, Nan Zhang, Jianzhong Liu, Olivine origination in lunar Das crater through three-dimensional numerical simulation, Icarus, 2022 (http://dx.doi.org/10.1016/j.icarus.2022.115333) 中使用。使用SALEc时推荐引用这篇文章。
 
