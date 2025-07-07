@@ -3,7 +3,7 @@ SALEc是基于任意拉格朗日-欧拉法(Hirt et al., 1974; Amsden, 1980)开�
 
 代码已经在Huacheng Li, Zongyu Yue, Yangting Lin, Kaichang Di, Nan Zhang, Jianzhong Liu, Olivine origination in lunar Das crater through three-dimensional numerical simulation, Icarus, 2022 (http://dx.doi.org/10.1016/j.icarus.2022.115333) 中使用。使用SALEc时推荐引用这篇文章。
 
-#### 二维版本[SALEc-2D]([huachengli/SALEc-2D-public](https://github.com/huachengli/SALEc-2D-public))
+#### 二维版本[SALEc-2D](https://github.com/huachengli/SALEc-2D-public)
 
 #### 参考文献
 1. Amsden, A. A., Ruppel, H. M., Hirt, C. W., 1980. SALE: A simplified ALE computer program for fluid flow at all speeds. Los Alamos National Laboratory Technical Report.

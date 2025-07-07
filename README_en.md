@@ -5,7 +5,10 @@ SALEc is a hypervelocity impact simulation program developed based on the Arbitr
 
 This code have been used in Huacheng Li, Zongyu Yue, Yangting Lin, Kaichang Di, Nan Zhang, Jianzhong Liu, Olivine origination in lunar Das crater through three-dimensional numerical simulation, Icarus, 2022 (http://dx.doi.org/10.1016/j.icarus.2022.115333). We recommend authors cite this research in published works.
 
+#### 2d version[huachengli/SALEc-2D-public](https://github.com/huachengli/SALEc-2D-public)
+
 #### References
+
 1. Amsden, A. A., Ruppel, H. M., Hirt, C. W., 1980. SALE: A simplified ALE computer program for fluid flow at all speeds. Los Alamos National Laboratory Technical Report.
 2. Benson, D. J., 2002. Volume of fluid interface reconstruction methods for multi-material problems. Applied Mechanics Reviews, 55(2), 151–165.
 3. Collins, G. S., Elbeshausen, D., Davison, T. M., Wünnemann, K., Ivanov, B., Melosh, H. J., 2016. iSALE-Dellen manual. Figshare, 136.
