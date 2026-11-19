@@ -16,7 +16,23 @@ int main(int argc, char * argv[])
 {
     MPI_Init(&argc, &argv);
 
-    InputFile * ifp = OpenInputFile("../SALEc.inp");
+    // Yue
+    char inpfile[256];
+    if(argc == 1)
+    {
+        sprintf(inpfile,"../SALEc.inp");
+    }
+    else if(argc == 2)
+    {
+        sprintf(inpfile,"%s",argv[1]);
+    }
+    else
+    {
+        fprintf(stderr,"invalid args for %s\n",__FILE__);
+        exit(0);
+    }
+
+    InputFile * ifp = OpenInputFile(inpfile);
 
     struct Mesh pMesh;
     struct MeshInfo pMeshInfo;
@@ -24,6 +40,7 @@ int main(int argc, char * argv[])
     TracerInfo pTracerInfo;
 
     SetMeshInfo(ifp,&pMeshInfo,&procInfo,&pMesh);
+    SetOutputDir();
 
     struct EosTable ETB[NMT];
     struct StateReference SRF[NMT];
@@ -40,8 +57,7 @@ int main(int argc, char * argv[])
     InitProcessInfo(&pMesh,&procInfo);
     ParaPackRecvSendInit(&procInfo);
 
-
-    InitMesh(ifp,&pMesh,ETB);
+    InitMesh(ifp,&pMesh,ETB,SRF);
     SetVelStavlity(&pMesh,TestVelStavlity);
 
 #ifdef SALEC_USE_CHECKPOINT
@@ -68,7 +84,11 @@ int main(int argc, char * argv[])
     double dt_max    = GetValueD(ifp,"cycle.maxdt","1.0e-2");
     double OutTime   = GetValueD(ifp,"output.time","1.0");
 
-    int  MaxSteps = GetValueI(ifp,"cycle.maxstep","100");
+    int  MaxSteps = GetValueI(ifp,"cycle.maxstep","-1");
+    if(MaxSteps < 0)
+    {
+        MaxSteps = INT_MAX;
+    }
     int  InitStep = GetValueI(ifp,"output.init","0");
     int  kOutStep = 0;
 
@@ -80,13 +100,51 @@ int main(int argc, char * argv[])
 #ifdef MPI_DEBUG_HOOK
     int local_rank;
     MPI_Comm_rank(SALEC_CART_COMM,&local_rank);
-    int debugvalue = 1;
+    volatile int debugvalue = 1;
     while(debugvalue && (0==local_rank))
         sleep(5);
 #endif
 
     for(int  iStep = 0;iStep<=MaxSteps && StepTime<= EndTime + dt_max;iStep++)
     {
+        if(emergency_state > 512)
+            break;
+
+        if((fabs(StepTime-kOutStep*OutTime - StartTime) <= 0.5*dt_max) || (iStep<=InitStep) || emergency_state >= 1)
+        {
+            char fname[200];
+            sprintf(fname,"vts/%s.proc%d.%d.vts",_prefix,procInfo.rank,kOutStep);
+            TestMesh(&pMesh,fname);
+            if(procInfo.rank==0)
+            {
+                fprintf(stdout,"[*%3d]Step:%04d, dt = %1.10e; t = %5.5e\n",kOutStep,iStep,dt,StepTime);
+            }
+
+#ifdef SALEC_USE_TRACER
+            OutputTracer(&pTracerInfo,&pMesh,kOutStep,procInfo.rank);
+            OutputTracerVtp(&pTracerInfo,&pMesh,kOutStep,procInfo.rank);
+            FlushEjecta(&pTracerInfo,kOutStep,procInfo.rank);
+#endif
+
+            if(procInfo.rank == 0)
+            {
+                write_vtm(procInfo.npgs,kOutStep,_prefix,pTracerInfo.Prefix);
+            }
+
+            if(fabs(StepTime-kOutStep*OutTime - StartTime) > 0.5*dt_max)
+                StartTime -= OutTime;
+
+            kOutStep++;
+        } else if(0==iStep%100)
+        {
+            if(procInfo.rank==0)
+            {
+                fprintf(stdout,"[    ]Step:%04d, dt = %1.10e; t = %5.5e\n",iStep,dt,StepTime);
+            }
+        }
+#ifdef SALEC_USE_TRACER
+        OutputEjecta(&pTracerInfo,&pMesh,StepTime,procInfo.rank);
+#endif
 
         
         for(int i=pMesh.nde1;i<pMesh.nde;i++)
@@ -181,32 +239,6 @@ int main(int argc, char * argv[])
         MPI_Barrier(SALEC_CART_COMM);
 #endif
 
-        if((fabs(StepTime-kOutStep*OutTime - StartTime) <= 0.5*dt_max) || (iStep<=InitStep))
-        {
-            char fname[200];
-            sprintf(fname,"%s.proc%d.%d.vts",_prefix,procInfo.rank,kOutStep);
-            TestMesh(&pMesh,fname);
-            if(procInfo.rank==0)
-            {
-                fprintf(stdout,"[*%3d]Step:%04d, dt = %1.10e; t = %5.5e\n",kOutStep,iStep,dt,StepTime);
-            }
-
-#ifdef SALEC_USE_TRACER
-            OutputTracer(&pTracerInfo,&pMesh,kOutStep,procInfo.rank);
-#endif
-
-            if(fabs(StepTime-kOutStep*OutTime - StartTime) > 0.5*dt_max)
-                StartTime -= OutTime;
-
-            kOutStep++;
-        } else if(0==iStep%100)
-        {
-            if(procInfo.rank==0)
-            {
-                fprintf(stdout,"[    ]Step:%04d, dt = %1.10e; t = %5.5e\n",iStep,dt,StepTime);
-            }
-        }
-
 #ifdef SALEC_USE_CHECKPOINT
         if((iStep%pMeshInfo.chkStep==0) && (pMeshInfo.chkStep>0))
         {
@@ -242,8 +274,23 @@ int main(int argc, char * argv[])
          */
         double tmpdt = dt_max;
         for(int i=0;i<pMesh.ndv;i++)
+        {
             tmpdt = Min(CalculateL1b(pMesh.DomainV[i],dt,pMeshInfo.MaxVelocity),tmpdt);
+        }
         MPI_Allreduce(&tmpdt, &dt, 1, MPI_DOUBLE, MPI_MIN, SALEC_CART_COMM);
+
+        /// check the emergency_state for debug
+        /*
+        int tmpemg = emergency_state;
+        MPI_Allreduce(&tmpemg,&emergency_state,1,MPI_INT,MPI_MAX,SALEC_CART_COMM);
+        if(procInfo.rank == 0)
+        {
+            fprintf(stdout,"[    ]Step:%04d, dt = %1.10e; t = %5.5e, emergency_state=%d\n",iStep,dt,StepTime,emergency_state);
+        }
+        fflush(stdout);
+        MPI_Barrier(SALEC_CART_COMM);
+        */
+
 
 #ifdef SALEC_USE_PERFMONITER
         if(procInfo.rank ==0 && iStep%100 == 0)
@@ -258,8 +305,8 @@ int main(int argc, char * argv[])
 #endif
 
 #ifdef SALEC_USE_TRACER
-        TracerExchangeEnd(&pTracerInfo,&procInfo,&pMesh);
-        TracerMove(&pTracerInfo,&pMesh, 0.5*dt);
+         TracerExchangeEnd(&pTracerInfo,&procInfo,&pMesh);
+         TracerMove(&pTracerInfo,&pMesh, 0.5*dt);
 #endif
         for(int i=pMesh.nde1;i<pMesh.nde;i++)
         {
@@ -339,11 +386,7 @@ int main(int argc, char * argv[])
     if(procInfo.rank==0)
     {
         fprintf(stdout,"Time used in MAIN LOOP: %8.7e\n",ed-st);
-        fprintf(stdout,"Writing VTM files \n");
-        for(int k=0;k<kOutStep;k++)
-            write_vtm(procInfo.npgs,k,_prefix);
     }
-
     fflush(stdout);
    /*
     DataClean(ATB,&pMesh,pMeshInfo.MaterialNum);

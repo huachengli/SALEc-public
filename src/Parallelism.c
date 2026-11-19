@@ -7,7 +7,6 @@
 
 MPI_Comm SALEC_CART_COMM;
 
-
 void SalecCartCommCreate(int dim[], int period[])
 {
     MPI_Cart_create(MPI_COMM_WORLD,DIM,dim,period,1,&SALEC_CART_COMM);

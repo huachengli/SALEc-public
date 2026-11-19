@@ -100,6 +100,7 @@ struct ProcessInfo
     int NumSend;
     int NumRecv;
 };
+
 typedef double * (*DataFunc)(struct Element *);
 extern DataFunc IdToData[MaxField];
 extern int CacheLength[MaxField];

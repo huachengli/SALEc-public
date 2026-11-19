@@ -342,7 +342,9 @@ void ConstructPlane(struct Element * ie)
             unsigned short vId = ie->dCut[k].vId;
             if(ie->dCut[k].d < 0)
             {
-                ie->CutRatio[vId] = CutVolume(dsum - ie->dCut[k].d,pCut);
+                /// change the volume strategy to sub-volume
+                // ie->CutRatio[vId] = CutVolume(dsum - ie->dCut[k].d,pCut);
+                ie->CutRatio[vId] = ie->SubVolumeRatio[vId];
                 negVol += ie->CutRatio[vId];
             } else
             {
@@ -359,7 +361,6 @@ void ConstructPlane(struct Element * ie)
         {
             CopyEx(ie->SubVolumeRatio,ie->CutRatio,VPE);
         }
-
     }
 }
 

@@ -17,6 +17,10 @@
 #define VaporElement 3
 #define VoidElement 2
 
+#define EOSDEN -1
+#define EOSENG 0
+#define EOSPRE 1
+#define EOSCSD 2
 
 struct ANEOSTable
 {
@@ -40,7 +44,7 @@ struct StateReference;
 typedef double (*StrengthFunc)(struct Element *, const struct StateReference *);
 typedef double (*DamageFunc)(struct Element *, const struct StateReference *);
 typedef double (*SoftFunc)(struct Element *, const struct StateReference *);
-struct StateReference
+typedef struct StateReference
 {
     /*
      * The parameters shared in one materials
@@ -96,7 +100,25 @@ struct StateReference
     double Acvis;
     double GammaEta;
     double GammaBeta;
-};
+
+    // liquids
+    int PolyLiq; // flag for whether use poly liquids
+    double Tlidc1;
+    double Tlidc2;
+    double Tlidc3;
+
+    // solids
+    int PolySol;
+    double Tsolc1;
+    double Tsolc2;
+    double Tsolc3;
+
+    // additional information for temperature/gravity profile
+
+    double thermexp;
+    double c_heat;
+    double den0;
+} state_ref;
 
 void AllocateANEOS(struct ANEOSTable *_t);
 void UnAllocateANEOS(struct ANEOSTable *_t);
@@ -115,6 +137,7 @@ double SimpleSheardam(struct Element *_e, const struct StateReference *_s);
 double SimpleSoft(struct Element *_e, const struct StateReference *_s);
 double JNCKSoft(struct Element *_e, const struct StateReference *_s);
 double SimonMelt(struct Element *_e, const struct StateReference *_s);
+double SolidusTem(struct StateReference * _s, double pre);
 double OnnakaSoft(struct Element *_e, const struct StateReference *_s, double Tmelt);
 double Ylundborg(double p,double y0,double fric,double ylim);
 double Ydrucker(double p,double y0,double fric,double ylim);
@@ -163,6 +186,7 @@ struct TillotsonTable
     double StepDen;
     int nDen;
 };
+typedef struct TillotsonTable tillotson_table;
 
 double TillPres(const struct TillotsonTable * _t, double EngIn, double RhoIn, double * Pres, double * Cs);
 double TillTemp(const struct TillotsonTable * _t,double EngIn, double RhoIn);
@@ -179,6 +203,7 @@ struct EosTable
     CalL3tFunc CalL3t;
     InterpolateFunc InterpolateTP;
 };
+typedef struct EosTable eos_table;
 
 void TillEOSCalL3tCompose(struct Element *_e, const struct EosTable * _t, int _k);
 void ANEOSCalL3tCompose(struct Element *_e, const struct EosTable * _t, int _k);
@@ -192,4 +217,6 @@ double PresProfRK3(struct EosTable *_t, double Pres[], double Grav[], double Tem
 
 StrengthFunc SelectStrength(const char s[]);
 DamageFunc SelectDamage(const char s[]);
+
+
 #endif //SALEC_STATE_H

@@ -10,6 +10,8 @@
 #include <stdio.h>
 #include <omp.h>
 #include <string.h>
+#include <assert.h>
+#include <limits.h>
 // The basic dimension information related to the structured points
 #define DIM  3  // mesh dimension
 #define DIM3 27
@@ -26,6 +28,9 @@
 #define TOLVEL   1e-5
 #define COURANT0 0.5
 #define COURANT1 0.5
+#define HANGINGVERTEXVEL 1 // remove hanging vertex velocity fixed as 0.
+#define BCFORCEOUTFLOW 1 // Apply forced output boundary condition
+#define WRITETRACERTXT 0
 #define COURANT2 2.0
 #define NMT    4   // the max number of material types in model
 #define NPHI   3   // the number of conservation variables in L3
@@ -273,6 +278,9 @@ struct Mesh
     char vtk_format[100];
     int nvof;
     int noffset;
+
+    double LX[DIM];
+    double X0[DIM];
 };
 
 struct MeshInfo
@@ -288,6 +296,7 @@ struct MeshInfo
     double DampZ1;
     double DampLambda;
     double MinPres;
+    double Scope[DIM][2];
 
     int PartPressure;
     int TensileFailure;
@@ -412,5 +421,7 @@ double DeterminantSym(const double tM[]);
 
 int ToLongId(int Idx, int Idy, int Idz, int nxp, int nyp, int nzp);
 int ToShortId(int * Idx, int * Idy, int * Idz,int LongId, int nxp, int nyp, int nzp);
+
+extern int emergency_state;
 
 #endif //SALEC_VARIABLE_H

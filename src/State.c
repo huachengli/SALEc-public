@@ -185,7 +185,7 @@ void ANEOSInitStateRef(struct ANEOSTable *_t, struct StateReference *_s)
      * this segment is copied from ANEOSCalL3t
      */
     int TI = 0;
-    int TJ = _t->nTem;
+    int TJ = _t->nTem - 1;
     while (TI + 1 < TJ)
     {
         int TM = (TI + TJ) / 2;
@@ -226,6 +226,28 @@ void ANEOSInitStateRef(struct ANEOSTable *_t, struct StateReference *_s)
     _s->MeltDen =  0.85 * _t->Dnorm;
     _s->VaporDen = 0.04 * _t->Dnorm;
     _s->Viscosity = 0.0;
+
+    double lcoord[2] = {Txr*2.0-1.0,Dxr*2.0-1.0};
+    double dpdt = IpB_X[2][0](lcoord)*_t->Data[TI][DI][1]
+                  + IpB_X[1][0](lcoord)*_t->Data[TI][DJ][1]
+                  + IpB_X[3][0](lcoord)*_t->Data[TJ][DI][1]
+                  + IpB_X[0][0](lcoord)*_t->Data[TJ][DJ][1];
+
+    dpdt *= 2.0/(_t->xTem[TJ] - _t->xTem[TI]);
+
+    double Cs = (_t->Data[TI][DI][2] * Dxl + _t->Data[TI][DJ][2] * Dxr) * Txl
+                + (_t->Data[TJ][DI][2] * Dxl + _t->Data[TJ][DJ][2] * Dxr) * Txr;
+
+    _s->thermexp = dpdt/(Cs*Cs*_t->Dnorm);
+    double dedt = IpB_X[2][0](lcoord)*_t->Data[TI][DI][0]/_t->yDen[DI]
+                  + IpB_X[1][0](lcoord)*_t->Data[TI][DJ][0]/_t->yDen[DJ]
+                  + IpB_X[3][0](lcoord)*_t->Data[TJ][DI][0]/_t->yDen[DI]
+                  + IpB_X[0][0](lcoord)*_t->Data[TJ][DJ][0]/_t->yDen[DJ];
+    dedt *= 2.0/(_t->xTem[TJ] - _t->xTem[TI]);
+    _s->c_heat = dedt;
+    _s->den0 = _t->Dnorm;
+
+    //fprintf(stdout,"%s:coef(%e,%e,%e,%d)\n",__func__,_s->c_heat,_s->thermexp,_s->den0,_s->MaterialId);
 }
 
 int GetState(struct Element *_e, const struct StateReference _s[], int nm)
@@ -291,7 +313,9 @@ double SimpleRockStrength(struct Element *_e, const struct StateReference *_s)
     double Ydam = Ydrucker(_e->Pressure,_s->Ydam0,_s->Yfricdam,_s->Ylimdam);
     double Yac = BlockVibStrength(_e,_s);
     Ydam = Min(Yint,Ydam);
-    return Min(Ydam * _e->Damage + Yint * (1.0 - _e->Damage),Yac);
+    // Yue
+    // fprintf(stdout,"SimpleSoft:      %f\n",SimpleSoft(_e,_s));
+    return SimpleSoft(_e,_s)*Min(Ydam * _e->Damage + Yint * (1.0 - _e->Damage),Yac);
 }
 
 double SimpleRockNoacfl(struct Element *_e, const struct StateReference *_s)
@@ -325,7 +349,11 @@ double JohnsonCook2(struct Element *_e, const struct StateReference *_s)
 double JohnsonCook1(struct Element *_e, const struct StateReference *_s)
 {
     double PlasticStrain    = Wind(_e->PsiL3[7],0.0,_s->JCMaxPlastic);
-    double JcY1 = _s->JCA + _s->JCB * pow(PlasticStrain,_s->JCN);
+    double JcY1 = _s->JCA;
+    if(_s->JCB > 0.0)
+    {
+        JcY1 += _s->JCB * pow(PlasticStrain,_s->JCN);
+    }
     double DotPlasticStrain = _e->sInvSta2;
     double JcY2 = 1.0;
     if(DotPlasticStrain > 1.0 && _s->JCC > 0.0)
@@ -370,9 +398,30 @@ double SimonMelt(struct Element *_e, const struct StateReference *_s)
     return _s->Tmelt0 * pow(_s->Asimon*_e->Pressure + 1.0,_s->Csimon);
 }
 
+double SolidusTem(struct StateReference * _s, double pre)
+{
+    if(NULL == _s)
+        return -1;
+
+    if(_s->PolySol != 0)
+    {
+        double pre_gpa = pre*1.0e-9;
+        return _s->Tsolc1 + _s->Tsolc2*pre_gpa + _s->Tsolc3*pre_gpa*pre_gpa;
+    }
+    else
+    {
+        return _s->Tmelt0 * pow(_s->Asimon*pre + 1.0,_s->Csimon);
+    }
+}
+
+
 double OnnakaSoft(struct Element *_e, const struct StateReference *_s, double Tmelt)
 {
-    return tanh(Tmelt/_e->Temperature - 1.0)*_s->Tfrac;
+    // Yue
+    // fprintf(stdout,"Tmelt:      %f\n",Tmelt);
+    // fprintf(stdout,"Temperature:%f\n",_e->Temperature);
+    // fprintf(stdout,"\n");
+    return Max(0.0,tanh((Tmelt/_e->Temperature - 1.0)*_s->Tfrac));
 }
 
 void Over(FILE * fp,int n)
@@ -438,7 +487,7 @@ double ANEOSInterpolateTP(struct ANEOSTable *_t, double tTem, double tPre, int D
      */
 
     int TI = 0;
-    int TJ = _t->nTem;
+    int TJ = _t->nTem - 1;
     while (TI + 1 < TJ)
     {
         int TM = (TI + TJ) / 2;
@@ -994,7 +1043,7 @@ double TillTemp(const struct TillotsonTable * _t,double EngIn, double RhoIn)
     double Dxl = DL + 1.0 - RhoIn/_t->StepDen;
     double Dxr = 1.0 - Dxl;
     double rEngIn = Dxl*_t->yEng[DL] + Dxr*_t->yEng[DL+1];
-    return Max((EngIn - rEngIn)/_t->TLCv,0.0) + _t->TLTref;
+    return Max((EngIn - rEngIn)/_t->TLCv  + _t->TLTref,0.0);
 }
 
 
@@ -1022,6 +1071,10 @@ void TillInitStateRef(struct TillotsonTable *_t, struct StateReference *_s)
     double GasMin = 1.0e-4*_t->TLRho0;
     _s->VaporDen = GasMin*10.0;
     _s->Viscosity = 0.0;
+
+    _s->c_heat = _t->TLCv;
+    _s->thermexp = _t->TLCv*(_t->TLb + _t->TLa)/(_t->TLA/_t->TLRho0);
+    _s->den0 = _t->TLRho0;
 }
 
 
@@ -1121,4 +1174,3 @@ double ANEOSInterpolateTPCompose(struct EosTable *_t, double tTem, double tPre, 
 {
     return ANEOSInterpolateTP(_t->_atb,tTem,tPre,DataId);
 }
-

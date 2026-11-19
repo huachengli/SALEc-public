@@ -626,6 +626,15 @@ void FlushCondE(struct Mesh * _mesh)
     }
 }
 
+void ForceOutflow(double * x, double * n)
+{
+    double rst = Dot(x,n);
+    if(rst < 0.0)
+    {
+        ScalerAddition(x,n,2.0*rst);
+    }
+}
+
 void FlushCondEL1(struct Mesh * _mesh)
 {
     for(int k=0;k<_mesh->nce;k++)
@@ -669,6 +678,13 @@ void FlushCondEL3(struct Mesh * _mesh)
         ice->dest->Csound             = ice->refe->Csound;
         if(1==ice->CEType)
         {
+#ifdef BCFORCEOUTFLOW
+            double check_outflow = Dot(ice->Wnorm[0],ice->refe->Momentum);
+            if(check_outflow > 0.0)
+            {
+                ScalerAddition(ice->refe->Momentum,ice->Wnorm[0],-2.0*check_outflow);
+            }
+#endif
             Copy(ice->refe->Momentum,ice->dest->Momentum);
             ScalerAddition(ice->dest->Momentum,ice->Wnorm[0], ice->Tr[0]*Dot(ice->Wnorm[0],ice->refe->Momentum));
         } else if(2==ice->CEType)
@@ -704,6 +720,13 @@ void FlushCondEL5(struct Mesh * _mesh)
         }
         if(1==ice->CEType)
         {
+#ifdef BCFORCEOUTFLOW
+            double check_outflow = Dot(ice->Wnorm[0],ice->refe->Momentum);
+            if(check_outflow > 0.0)
+            {
+                ScalerAddition(ice->refe->Momentum,ice->Wnorm[0],-2.0*check_outflow);
+            }
+#endif
             Copy(ice->refe->Momentum,ice->dest->Momentum);
             ScalerAddition(ice->dest->Momentum,ice->Wnorm[0], ice->Tr[0]*Dot(ice->Wnorm[0],ice->refe->Momentum));
         } else if(2==ice->CEType)

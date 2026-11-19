@@ -3,6 +3,7 @@
 //
 
 #include "Iteration.h"
+#include "Parallelism.h"
 
 void CalculateGradM(struct Element *_element, int nm)
 {
@@ -80,6 +81,18 @@ void RheologyUpdate(struct Element *_element, double dt, const struct StateRefer
     double * VibVelocity = _element->PsiL3 + 8;
     // step 1: Get the increment of stress (Elastic)
     // accord to the Jaumann Equation
+    // Yue
+/*    double xp = _element->Center[0];
+    double yp = _element->Center[1];
+    double zp = _element->Center[2];
+    double distance = sqrt((xp+2.0e6)*(xp+2.0e6)+(yp+6.0e6)*(yp+6.0e6)+(zp*zp));
+    if(distance/4.0e4<4)
+    {
+       int myrank;
+       MPI_Comm_rank(SALEC_CART_COMM,&myrank);
+       fprintf(stdout,"%d")
+       fprintf(stdout,"\n%04d\n",myrank);
+    } */
     if (SolidElement == _element->State)
     {
 
@@ -348,7 +361,8 @@ void CalculateABV2(struct Element *_element, double _artvis, double _artvis2)
     // it is a [ pressure ]
     // _artvis is the lambda in sale3d manual and should be < 0.25 to avoid excessive damping.
     // 0.1 has been satisfactory for many application
-    if(VoidElement == _element->State || _element->DivVel > 0.0)
+    // remove artificial pressure on loose region.
+    if(VoidElement == _element->State || _element->DivVel > 0.0 || _element->VOF[VACUUM] > 0 || _element->Pressure <= 0.0)
     {
         _element->ArtificialPressure = 0.0;
     }
@@ -368,13 +382,50 @@ void CalculateBFV(struct Boundary *_boundary)
      * before Courant number of donor cell
      */
     double _boundaryFluxVolume = 0.0;
+#ifndef HANGINGVERTEXVEL
     for (int k = 0; k < VPB; k++)
     {
         struct Vertex *kNeV = _boundary->NeV[k];
         _boundaryFluxVolume += -1.0 * Dot(kNeV->DistanceL1, _boundary->FluxFactor[k]);
     }
+#else
+    // set average velocity on void vertex
+    double SumVertexMassL1 = 0.0;
+    double AvgDistanceL1[3] = {0.0,0.0,0.0};
+    int NumVoidVertex = 0;
+    for(int k = 0; k < VPB; k++)
+    {
+        struct Vertex *kNeV = _boundary->NeV[k];
+        if(kNeV->MassL1 > 0.0)
+        {
+            SumVertexMassL1 += kNeV->MassL1;
+            ScalerAddition(AvgDistanceL1, kNeV->DistanceL1, kNeV->MassL1);
+        } else
+        {
+            NumVoidVertex ++;
+        }
+    }
+    if(NumVoidVertex >= 1 && SumVertexMassL1 > 0.0)
+    {
+        Scaler(AvgDistanceL1,1.0/SumVertexMassL1);
+    }
 
+    for (int k = 0; k < VPB; k++)
+    {
+        struct Vertex *kNeV = _boundary->NeV[k];
+        if(kNeV->MassL1 > 0.0)
+        {
+            _boundaryFluxVolume += -1.0 * Dot(kNeV->DistanceL1, _boundary->FluxFactor[k]);
+        }
+        else
+        {
+            _boundaryFluxVolume += -1.0 * Dot(AvgDistanceL1, _boundary->FluxFactor[k]);
+        }
+
+    }
+#endif
     _boundary->FluxVolume = _boundaryFluxVolume;
+
 }
 
 void CalculateCourant(struct Element * doe)
@@ -1438,7 +1489,6 @@ void CalculateL3c(struct Element *_e, const struct EosTable _et[], const struct 
      * The Shear module is the harmonic average weighted by VOF
      */
 
-
     if((1==_minfo->PartPressure && _e->VOF[0]>= 1.0-TOLVOF)||(0==_minfo->PartPressure && _e->VOF[0]>=TOLVOF))
     {
         _e->Temperature = 0.0;
@@ -1558,11 +1608,16 @@ void MapE2Vb(struct Vertex * iv)
     double TotalMass = 0.0;
     double deltaMomentum[DIM] = {0.0};
     int VoidVertex = 0;
+    int VoidCorner = 0;
     for(int j=0;j<EPV;j++)
     {
         if(iv->NeE[j]->VOF[0]>1.0-TOLVOF)
         {
             VoidVertex += 1;
+        }
+        if(iv->NeE[j]->CutRatio[PCVE[j]] <= 0.0)
+        {
+            VoidCorner += 1;
         }
 
         TotalMass    += iv->NeE[j]->Mass * iv->NeE[j]->CutRatio[PCVE[j]];
@@ -1590,7 +1645,87 @@ void MapE2Vb(struct Vertex * iv)
         iv->State = 2;
     }
 
+#ifdef HANGINGVERTEXVEL
+    // if(VoidCorner >= EPV && iv->State == 1)
+    // {
+    //     iv->State = 3;
+    // }
+#endif
 }
+
+void MapE2Vb_check(struct Vertex * iv)
+{
+    /*
+     * share same code with the MapE2Bv, used for debug in CutRatio
+     */
+    iv->CsoundL1     = 0.0;
+    iv->State = 0;
+    double TotalMass = 0.0;
+    double deltaMomentum[DIM] = {0.0};
+    int VoidVertex = 0;
+    int VoidCorner = 0;
+    for(int j=0;j<EPV;j++)
+    {
+        if(iv->NeE[j]->VOF[0]>1.0-TOLVOF)
+        {
+            VoidVertex += 1;
+            continue;
+        }
+        if(iv->NeE[j]->CutRatio[PCVE[j]] <= 0.0)
+        {
+            VoidCorner += 1;
+            continue;
+        }
+
+        TotalMass    += iv->NeE[j]->Mass * iv->NeE[j]->CutRatio[PCVE[j]];
+        iv->CsoundL1 += iv->NeE[j]->Mass * iv->NeE[j]->CutRatio[PCVE[j]] * iv->NeE[j]->Csound;
+        ScalerAddition(deltaMomentum,iv->NeE[j]->Momentum,iv->NeE[j]->CutRatio[PCVE[j]]);
+    }
+
+    if((TotalMass < TOLRHO * iv->Volume) || (iv->VOF[0] > 1.0 - TOLVOF))
+    {
+        Zero(iv->Velocity);
+        iv->MassL1   = 0.0;
+        iv->CsoundL1 = 0.0;
+        iv->State   = 1;
+    }
+    else
+    {
+        ScalerMove(iv->Velocity,deltaMomentum,1.0/TotalMass);
+        iv->MassL1    = TotalMass;
+        iv->CsoundL1 /= TotalMass;
+        iv->State    = 0;
+    }
+
+    if(VoidVertex >= 1 && 0==iv->State)
+    {
+        iv->State = 2;
+    }
+
+    #ifdef HANGINGVERTEXVEL
+    // if(VoidCorner >= EPV && iv->State == 1)
+    // {
+    //     iv->State = 3;
+    // }
+    #endif
+
+    /// check the surprise sound velocity
+    if(iv->CsoundL1 > 1.0e6)
+    {
+        int myrank;
+        MPI_Comm_rank(SALEC_CART_COMM,&myrank);
+        fprintf(stdout,"%s[%d]:surprise sound speed = %e\n",__func__,myrank,iv->CsoundL1);
+        for(int j=0;j<EPV;j++)
+        {
+            fprintf(stdout,">>>E[%d], cut=%f\n",j,iv->NeE[j]->CutRatio[PCVE[j]]);
+            for(int k=0;k<NMT;++k)
+                fprintf(stdout,"VOF[%d]=%e;",k,iv->NeE[j]->VOF[k]);
+            fprintf(stdout,"\n");
+            fprintf(stdout,"mass=%e, sound=%e\n",iv->NeE[j]->Mass,iv->NeE[j]->Csound);
+        }
+    }
+}
+
 
 void MapV2Eb(struct Element * ie, const struct MeshInfo *_info)
 {
@@ -1669,8 +1804,20 @@ double CalculateL1b(struct Vertex * iv, double dt0, double MaxVel)
     }
 
     double Cwave = Vel + iv->CsoundL1;
+
     if(Cwave > TOLVEL)
         dt = Min(COURANT1*iv->dx_min/Cwave,dt);
+
+    /// check the sound, monitor surprise sound speed
+    /*
+    if(COURANT1*iv->dx_min/Cwave < 3.0e-3 || iv->CsoundL1 < 0.)
+    {
+        int myrank;
+        MPI_Comm_rank(SALEC_CART_COMM,&myrank);
+        fprintf(stdout,"%s[%d]: vel=%e, sound=%e, wave=%e, dx=%e, dt=%e\n",__func__, myrank, Vel, iv->CsoundL1, Cwave, iv->dx_min, dt);
+        emergency_state += 1;
+    }
+     */
     return dt;
 }
 

@@ -10,6 +10,7 @@
 #include "Reconstruction.h"
 #include "Error.h"
 #include <math.h>
+//#include "Parallelism.h"  Yue added it to decide current cpu kernel
 
 void CalculateGradM(struct Element *_element, int nm);
 void CalculateABV(struct Element *_element, double _artvis);

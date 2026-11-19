@@ -43,7 +43,7 @@ void SRFInit(InputFile * ifp,struct StateReference * _s, int iMat);
 void SetBC(InputFile * ifp, struct Mesh * _mesh);
 void SetDamping(struct MeshInfo * _minfo, struct Mesh * _mesh);
 void InitMeshANEOS(InputFile * ifp, struct Mesh * _mesh, struct ANEOSTable * ATB);
-void InitMesh(InputFile * ifp, struct Mesh * _mesh, struct EosTable * _etb);
+void InitMesh(InputFile * ifp, struct Mesh * _mesh, struct EosTable * _etb, struct StateReference * _sref);
 double Spacing(int k,double ext, int eL, int eR, int N);
 
 double LoadTillEOS(struct TillotsonTable * _t, FILE * fp);

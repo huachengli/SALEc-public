@@ -238,14 +238,14 @@ void TestVelStavlity(struct Vertex * iv)
     /*
      * Set dx_min which related the stablity
      */
-    int First = 1.0;
+    int First = 1;
     for(int i=0;i<VPE;i++)
     {
         if(NULL == iv->NeE[i])
             continue;
         else if(First)
         {
-            First = 0.0;
+            First = 0;
             iv->dx_min = 1.0/iv->NeE[i]->rdx_min;
             if(iv->dx_min < 0)
                 exit(0);
@@ -280,3 +280,5 @@ void DataClean(struct ANEOSTable * ATB, struct Mesh * _mesh,int nm)
     for(int k=1;k<nm;k++)
         UnAllocateANEOS(ATB + k);
 }
+
+

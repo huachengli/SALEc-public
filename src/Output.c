@@ -122,6 +122,22 @@ void vtk_output_module(struct Mesh *E, FILE *fp)
     free(floattemp);
 }
 
+void vtk_output_strength(struct Mesh *E, FILE *fp)
+{
+    float* floattemp = (float *)malloc(E->ne*sizeof(float));
+    fprintf(fp, "        <DataArray type=\"Float32\" Name=\"Strength\" format=\"%s\">\n",E->vtk_format);
+    for(int i=0;i < E->ne;i++)
+        floattemp[i] =  (float) E->Elements[i].ShearStrength;
+    if(0==strcmp(E->vtk_format,"binary"))
+        write_binary_array(E->ne,floattemp,fp);
+    else
+        write_ascii_array(E->ne,1,floattemp,fp);
+
+    fputs("        </DataArray>\n", fp);
+    free(floattemp);
+}
+
+
 void vtk_output_debug(struct Mesh *E, FILE *fp)
 {
 #if ELEMENT_DEBUG
@@ -261,8 +277,6 @@ void vtk_output_damage(struct Mesh *E, FILE *fp)
     free(floattemp);
 }
 
-
-
 void write_ascii_array(int nn, int perLine, float *array, FILE *fp)
 {
     int i;
@@ -278,6 +292,29 @@ void write_ascii_array(int nn, int perLine, float *array, FILE *fp)
         case 6:
             for(i=0; i < nn/6; i++)
                 fprintf(fp,"%.4e %.4e %.4e %.4e %.4e %.4e\n",
+                        array[6*i],array[6*i+1],array[6*i+2],
+                        array[6*i+3],array[6*i+4],array[6*i+5]);
+            break;
+        default:
+            break;
+    }
+}
+
+void write_ascii_array_u32(int nn, int perLine, unsigned int *array, FILE *fp)
+{
+    int i;
+    switch(perLine) {
+        case 1:
+            for(i=0; i<nn; i++)
+                fprintf(fp, "%d\n", array[i]);
+            break;
+        case 3:
+            for(i=0; i < nn/3; i++)
+                fprintf(fp,"%d %d %d\n",array[3*i],array[3*i+1],array[3*i+2]);
+            break;
+        case 6:
+            for(i=0; i < nn/6; i++)
+                fprintf(fp,"%d %d %d %d %d %d\n",
                         array[6*i],array[6*i+1],array[6*i+2],
                         array[6*i+3],array[6*i+4],array[6*i+5]);
             break;
@@ -305,7 +342,7 @@ void zlibcompress(unsigned char* in, int nn, unsigned char** out, int *nn2)
     z_stream strm;
 
     /* hope compressed data will be <= uncompressed */
-    *out = malloc(sizeof(unsigned char)*nn);
+    *out = malloc(sizeof(unsigned char)*(nn*1.02 + 64));
 
     strm.zalloc = Z_NULL;
     strm.zfree = Z_NULL;
@@ -376,6 +413,26 @@ void FloatToUnsignedChar(float * floatarray, int nn, unsigned char * chararray)
         chararray[4*i+1]=floattransform.output[1];
         chararray[4*i+2]=floattransform.output[2];
         chararray[4*i+3]=floattransform.output[3];
+    }
+}
+
+void UintToUnsignedChar(unsigned int * uintarray, int nn, unsigned char * chararray)
+{
+    /* simple unsigned int to unsigned char array routine via union
+    nn = length(uintarray), chararray has to be BIG ENOUGH! */
+    int i;
+    union UintToUnsignedChars
+    {
+        unsigned int input;
+        unsigned char output[4];
+    } uinttransform;
+
+    for (i = 0; i < nn; i++) {
+        uinttransform.input = uintarray[i];
+        chararray[4 * i] = uinttransform.output[0];
+        chararray[4 * i + 1] = uinttransform.output[1];
+        chararray[4 * i + 2] = uinttransform.output[2];
+        chararray[4 * i + 3] = uinttransform.output[3];
     }
 }
 
@@ -512,6 +569,38 @@ void write_binary_array(int nn, float* array, FILE * f)
     free(compressedarray);
 }
 
+void write_binary_array_u32(int nn, unsigned int * array, FILE * f)
+{
+    /* writes vtk-data array of floats and performs zip and base64 encoding */
+    int chararraylength=4*nn;	/* nn floats -> 4*nn unsigned chars */
+    unsigned char * chararray = malloc (chararraylength * sizeof(unsigned char));
+    int compressedarraylength = 0;
+    unsigned char * compressedarray;
+    unsigned char ** pointertocompressedarray= &compressedarray;
+    int base64plusheadlength;
+    unsigned char * base64plusheadarray;
+
+    //FloatToUnsignedChar(array,nn,chararray);
+    UintToUnsignedChar(array,nn,chararray);
+
+    /* compression routine */
+    zlibcompress(chararray,chararraylength,pointertocompressedarray,&compressedarraylength);
+
+    /* special header for zip compressed and bas64 encoded data
+    header needs 4 int32 = 16 byte -> 24 byte due to base64 (4*16/3) */
+    base64plusheadlength = 24 + 4*ceil((double) compressedarraylength/3.0);
+    base64plusheadarray  = malloc(sizeof(unsigned char)* base64plusheadlength);
+
+    /* fills base64plusheadarray with everything ready for simple writing */
+    base64plushead(compressedarray,compressedarraylength, chararraylength, base64plusheadarray);
+
+    fwrite(base64plusheadarray,sizeof(unsigned char),base64plusheadlength,f);
+    fprintf(f,"\n");
+    free(chararray);
+    free(base64plusheadarray);
+    free(compressedarray);
+}
+
 void vtk_output_velo(struct Mesh *E, FILE *fp)
 {
     int nodes=E->nv;
@@ -601,6 +690,7 @@ void vtk_output_all(struct Mesh *E,FILE * fp)
     vtk_output_module(E,fp);
     vtk_output_debug(E,fp);
     vtk_output_sInvSte(E,fp);
+    vtk_output_strength(E,fp);
     vtk_output_vof(E,fp);
     vtk_output_gradvof(E,fp);
     vtk_output_stress(E,fp);
@@ -632,6 +722,7 @@ void vtk_output(struct Mesh *E,FILE * fp)
     vtk_output_density(E,fp);
     vtk_output_sound(E,fp);
     vtk_output_module(E,fp);
+    vtk_output_strength(E,fp);
     vtk_output_sInvSte(E,fp);
     vtk_output_vof(E,fp);
     vtk_cell_data_trailer(E, fp);
@@ -642,7 +733,7 @@ void vtk_output(struct Mesh *E,FILE * fp)
 }
 
 
-void write_vtm(int nproc, int cycles, const char _prefix[])
+void write_vtm(int nproc, int cycles, const char _prefix[], const char _prefix2[])
 {
     const char header[] =
             "<?xml version=\"1.0\"?>\n"
@@ -655,12 +746,24 @@ void write_vtm(int nproc, int cycles, const char _prefix[])
     fputs(header, fp);
 
     for(int k=0; k<nproc; k++) {
-        fprintf(fp, "    <DataSet index=\"%d\" file=\"%s.proc%d.%d.vts\"/>\n",
+        fprintf(fp, "    <DataSet index=\"%d\" file=\"vts/%s.proc%d.%d.vts\"/>\n",
                 k,_prefix, k, cycles);
     }
     fputs("  </vtkMultiBlockDataSet>\n",fp);
     fputs("</VTKFile>",fp);
     fclose(fp);
+#ifdef SALEC_USE_TRACER
+    sprintf(fname,"%s.tracer.%04d.vtm",_prefix2,cycles);
+    fp = fopen(fname,"w");
+    fputs(header, fp);
+
+    for(int k=0; k<nproc; k++) {
+        fprintf(fp, "    <DataSet index=\"%d\" file=\"vtp/%s.proc%d.%d.vtp\"/>\n",k,_prefix2, k, cycles);
+    }
+    fputs("  </vtkMultiBlockDataSet>\n",fp);
+    fputs("</VTKFile>",fp);
+    fclose(fp);
+#endif
 }
 
 void ChkWrite(struct Mesh * _mesh,int _xrank, const char _chkPrefix[])
@@ -749,6 +852,101 @@ void ChkLoad(struct Mesh * _mesh,int _xrank, const char _chkPrefix[])
     fclose(fp);
 }
 
+void vtp_file_header(FILE *fp, int num_pts)
+{
+    const char format[] =
+            "<?xml version=\"1.0\"?>\n"
+            "<VTKFile type=\"PolyData\" version=\"1.0\" compressor=\"vtkZLibDataCompressor\" byte_order=\"LittleEndian\">\n"
+            "  <PolyData>\n"
+            "    <Piece NumberOfPoints=\"%d\" NumberOfVerts=\"0\" NumberOfLines=\"0\" NumberOfStrips=\"0\" NumberOfPolys=\"0\">\n";
+
+    char header[1024];
+
+    snprintf(header, 1024, format, num_pts);
+    fputs(header, fp);
+}
+
+void vtp_file_trailer(FILE *fp)
+{
+    const char trailer[] =
+            "    </Piece>\n"
+            "  </PolyData>\n"
+            "</VTKFile>\n";
+
+    fputs(trailer, fp);
+}
+
+void vtk_dataarray_vec_f(FILE *fp, const char * name, const char * vtk_format, const float * dataarray, int len_dataarray, int n_component)
+{
+    float* floattemp = (float *)malloc(len_dataarray*sizeof(float)*n_component);
+    fprintf(fp, "        <DataArray type=\"Float32\" Name=\"%s\" NumberOfComponents=\"%d\" format=\"%s\">\n", name,n_component,vtk_format);
+    for(int i=0;i < len_dataarray*n_component;i++)
+        floattemp[i] =  (float) dataarray[i];
+
+    if(0==strcmp(vtk_format,"binary"))
+        write_binary_array(len_dataarray*n_component,floattemp,fp);
+    else
+        write_ascii_array(len_dataarray*n_component,n_component,floattemp,fp);
+    fputs("        </DataArray>\n", fp);
+    free(floattemp);
+}
+
+void vtk_dataarray_vec_u32(FILE *fp, const char * name, const char * vtk_format, const unsigned int * dataarray, int len_dataarray, int n_component)
+{
+    unsigned int * u32temp = (unsigned int *)malloc(len_dataarray * sizeof(unsigned int) * n_component);
+    fprintf(fp, "        <DataArray type=\"UInt32\" Name=\"%s\" NumberOfComponents=\"%d\" format=\"%s\">\n", name,n_component,vtk_format);
+    for(int i=0;i < len_dataarray*n_component;i++)
+        u32temp[i] = dataarray[i];
+
+    if(0==strcmp(vtk_format,"binary"))
+        write_binary_array_u32(len_dataarray*n_component, u32temp, fp);
+    else
+        write_ascii_array_u32(len_dataarray*n_component, n_component, u32temp, fp);
+    fputs("        </DataArray>\n", fp);
+    free(u32temp);
+}
 
 
+void vtk_point_header(FILE *fp)
+{
+    fputs("      <Points>\n", fp);
+}
 
+void vtk_point_trailer(FILE *fp)
+{
+    fputs("      </Points>\n", fp);
+}
+
+void make_empty_dir(const char * dir)
+{
+    if(access(dir, F_OK) == 0)
+    {
+        DIR * _dir = opendir(dir);
+        struct dirent * _tmp;
+        while(1)
+        {
+            _tmp = readdir(_dir);
+            if(NULL == _tmp) break;
+            if(strcasecmp(".",_tmp->d_name)==0 || strcasecmp("..",_tmp->d_name)==0) continue;
+            if(_tmp->d_type == DT_REG)
+            {
+                char _tmp_name[4096];
+                snprintf(_tmp_name,4096,"%s/%s",dir,_tmp->d_name);
+                remove(_tmp_name);
+            }
+
+        }
+        closedir(_dir);
+    } else
+    {
+        mkdir(dir, 0700);
+    }
+}
+
+void SetOutputDir()
+{
+    make_empty_dir("./vtp");
+    make_empty_dir("./vts");
+    make_empty_dir("./txt");
+    make_empty_dir("./ejecta");
+}

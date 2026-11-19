@@ -13,14 +13,21 @@
 struct _Tracer;
 typedef struct _Tracer
 {
-    double Position[DIM];
     int NeE;
     unsigned int Id;
+    int matId;
+    double Position[DIM];
+    double PeakPre;
+    double PeakTem;
+    double DumpTmp;
     struct _Tracer * next;
 } Tracer;
 
+#define TRDLEN (DIM+3)
+#define TRILEN (2)
 
-typedef struct
+struct _TracerInfo;
+typedef struct _TracerInfo
 {
     Tracer * head;
     Tracer * tail;
@@ -39,6 +46,12 @@ typedef struct
 
     char Prefix[MaxStrLen];
     char Type[MaxStrLen];
+
+    char EjectaModel[MaxStrLen];
+    double Hthreshold;
+    double Pcenter[DIM];
+    int (*EjectaFunc)(Tracer*,struct _TracerInfo *, struct Element * _mesh);
+    FILE * efp;
 } TracerInfo;
 
 void TailInsertList(TracerInfo * _tinfo,Tracer * _x,unsigned int _Len);
@@ -47,6 +60,9 @@ void TracerDel(TracerInfo * _tinfo, Tracer * _x);
 void TailInsert(TracerInfo * _tinfo,Tracer * _x);
 void InitTracer(TracerInfo * _tinfo, InputFile * ifp,struct Mesh * _mesh);
 void OutputTracer(TracerInfo * _tinfo, struct Mesh * _mesh,int step,int rank);
+void OutputTracerVtp(TracerInfo * _tinfo,struct Mesh * _mesh,int step,int rank);
+void OutputEjecta(TracerInfo * _tinfo,struct Mesh * _mesh,double time,int rank);
+void FlushEjecta(TracerInfo * _tinfo, int step, int rank);
 void TracerMove(TracerInfo * _tinfo, struct Mesh * _mesh,double dt);
 
 void TracerInfoExchangeBegin(TracerInfo * _tinfo, struct ProcessInfo * _pinfo, struct Mesh * _mesh);
@@ -56,4 +72,7 @@ void TracerExchangeEnd(TracerInfo * _tinfo, struct ProcessInfo * _pinfo, struct 
 void TracerClean(TracerInfo * _tinfo);
 
 void InitTracerInfo(TracerInfo * _tinfo, struct MeshInfo * _minfo);
+
+int PlanetEjectaDetect(Tracer * _t, TracerInfo * _tinfo,struct Element *);
+int FlatEjectaDetect(Tracer * _t, TracerInfo * _tinfo,struct Element *);
 #endif //SALEC_TRACER_H

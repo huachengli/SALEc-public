@@ -3,6 +3,10 @@
 //
 #include "Variable.h"
 
+// used in some debug mode.
+int emergency_state = 0;
+
+
 struct Vertex *GetVertex(struct Mesh *_mesh, int Idx, int Idy, int Idz)
 {
     if (Idx >= _mesh->nxp || Idy >= _mesh->nyp || Idz >= _mesh->nzp)
@@ -462,7 +466,6 @@ void NormalizationEx(double p[], double Scale)
         p[Y] = 0.0;
         p[X] = 0.0;
     }
-
 }
 
 

@@ -3,6 +3,8 @@
 //
 
 #include "InputParser.h"
+#include "Planet.h"
+
 char * rtrim(char *str)
 {
     if (str == NULL || *str == '\0')
@@ -114,7 +116,7 @@ InputFile * OpenInputFile(const char fname[])
 {
     FILE * fp = fopen(fname,"r");
     InputFile * ifp = (InputFile *) malloc(sizeof(InputFile));
-    if(NULL == ifp)
+    if(NULL == ifp || NULL == fp)
     {
         fprintf(stdout,"Cannot open input file * %s * \n",fname);
         exit(0);
@@ -487,12 +489,6 @@ int GetValueIk(InputFile * ifp,const char key[], int k,char dvalue[])
 
 void SetMeshInfo(InputFile * ifp, struct MeshInfo * _minfo, struct ProcessInfo *_pinfo, struct Mesh * _mesh)
 {
-   /*
-    int myrank;
-    MPI_Comm_rank(SALEC_CART_COMM,&myrank);
-    if(0==myrank)
-        CheckInput(stdout,ifp);
-   */
 
     _pinfo->npgx = GetValueI(ifp,"processor.npgx","2");
     _pinfo->npgy = GetValueI(ifp,"processor.npgy","2");
@@ -571,6 +567,7 @@ void SetMeshInfo(InputFile * ifp, struct MeshInfo * _minfo, struct ProcessInfo *
     double dy = GetValueD(ifp,"mesh.dy","800.0");
     double dz = GetValueD(ifp,"mesh.dz","800.0");
 
+
     char GridExtOpt[MaxStrLen];
     GetValueS(ifp,"mesh.ext",GridExtOpt,"off");
     if(strcasecmp(GridExtOpt,"off")==0)
@@ -582,6 +579,21 @@ void SetMeshInfo(InputFile * ifp, struct MeshInfo * _minfo, struct ProcessInfo *
         double pX0 = -1.0*Lx* GetValueDk(ifp,"mesh.O",0,"0.5") - _pinfo->noffset*dx;
         double pY0 = -1.0*Ly* GetValueDk(ifp,"mesh.O",1,"0.5") - _pinfo->noffset*dy;
         double pZ0 = -1.0*Lz* GetValueDk(ifp,"mesh.O",2,"0.5") - _pinfo->noffset*dz;
+
+        _minfo->Scope[X][0] = pX0;
+        _minfo->Scope[Y][0] = pY0;
+        _minfo->Scope[Z][0] = pZ0;
+        _minfo->Scope[X][1] = pX0 + Lx;
+        _minfo->Scope[Y][1] = pY0 + Ly;
+        _minfo->Scope[Z][1] = pZ0 + Lz;
+
+        _mesh->LX[X] = Lx;
+        _mesh->LX[Y] = Ly;
+        _mesh->LX[Z] = Lz;
+
+        _mesh->X0[X] = pX0;
+        _mesh->X0[Y] = pY0;
+        _mesh->X0[Z] = pZ0;
 
         _minfo->V = (double ****) malloc(_minfo->npz * sizeof(double ***));
         for (int k = 0; k < _minfo->npz; k++)
@@ -646,6 +658,21 @@ void SetMeshInfo(InputFile * ifp, struct MeshInfo * _minfo, struct ProcessInfo *
         pY0 -= Spacing(_pinfo->noffset,Yext,YeL,YeR,_pinfo->Nyy)*dy;
         pZ0 -= Spacing(_pinfo->noffset,Zext,ZeL,ZeR,_pinfo->Nzz)*dz;
 
+        _minfo->Scope[X][0] = pX0;
+        _minfo->Scope[Y][0] = pY0;
+        _minfo->Scope[Z][0] = pZ0;
+        _minfo->Scope[X][1] = pX0 + Lx;
+        _minfo->Scope[Y][1] = pY0 + Ly;
+        _minfo->Scope[Z][1] = pZ0 + Lz;
+
+        _mesh->LX[X] = Lx;
+        _mesh->LX[Y] = Ly;
+        _mesh->LX[Z] = Lz;
+
+        _mesh->X0[X] = pX0;
+        _mesh->X0[Y] = pY0;
+        _mesh->X0[Z] = pZ0;
+
         _minfo->V = (double ****) malloc(_minfo->npz * sizeof(double ***));
         for (int k = 0; k < _minfo->npz; k++)
         {
@@ -662,6 +689,22 @@ void SetMeshInfo(InputFile * ifp, struct MeshInfo * _minfo, struct ProcessInfo *
                 }
             }
         }
+
+        if(_pinfo->rank == 0)
+        {
+            fprintf(stdout,"Mesh info: (%d x %d x %d)\n",_pinfo->Nxx,_pinfo->Nyy,_pinfo->Nzz);
+            fprintf(stdout,"X[%d] = %10.5e -> X[%d] = %10.5e\n",
+                _pinfo->noffset,_minfo->Scope[X][0],
+                _pinfo->Nxx-1-_pinfo->noffset,_minfo->Scope[X][1]);
+            fprintf(stdout,"Y[%d] = %10.5e -> Y[%d] = %10.5e\n",
+                _pinfo->noffset,_minfo->Scope[Y][0],
+                _pinfo->Nyy-1-_pinfo->noffset,_minfo->Scope[Y][1]);
+            fprintf(stdout,"Z[%d] = %10.5e -> Z[%d] = %10.5e\n",
+                _pinfo->noffset,_minfo->Scope[Z][0],
+                _pinfo->Nzz-1-_pinfo->noffset,_minfo->Scope[Z][1]);
+        }
+
+
 
         char DampOpt[MaxStrLen];
         GetValueS(ifp,"numerical.damping",DampOpt,"off");
@@ -684,7 +727,12 @@ void SetMeshInfo(InputFile * ifp, struct MeshInfo * _minfo, struct ProcessInfo *
 
 
     _minfo->MaterialNum = GetValueI(ifp,"material.nm","3");
-    char MaterialName[NMT][30];
+    if(_minfo->MaterialNum > NMT)
+    {
+        fprintf(stdout,"%s: number of material(%d) > NMT(%d)!\n",__func__,_minfo->MaterialNum,NMT);
+        exit(0);
+    }
+    char MaterialName[NMT][MaxStrLen];
     strcpy(MaterialName[0],"../eos/basalt_.aneos");
 
     for(int iMat=1;iMat<_minfo->MaterialNum;iMat++)
@@ -708,13 +756,21 @@ void SetMeshInfo(InputFile * ifp, struct MeshInfo * _minfo, struct ProcessInfo *
     }
 
     GetValueS(ifp,"output.format",_minfo->output_format,"binary");
-    _minfo->MaxVelocity = GetValueD(ifp,"numerical.MaxVelocity","2.0e4");
+    _minfo->MaxVelocity = GetValueD(ifp,"numerical.MaxVelocity","-1.67");
+    if(_minfo->MaxVelocity < 0.0)
+    {
+        double projectile_speed = GetValueDk(ifp,"projectile.velocity",0,"1.0e4");
+        _minfo->MaxVelocity = fabs(_minfo->MaxVelocity) * fabs(projectile_speed);
+    }
 
 }
 
 
 void SRFInit(InputFile * ifp,struct StateReference * _s, int iMat)
 {
+    int myrank;
+    MPI_Comm_rank(SALEC_CART_COMM,&myrank);
+
     // (ROCK)
     _s->Yint0    = GetValueDk(ifp,"material.yint0",iMat,"1.0");
     _s->Yfricint = GetValueDk(ifp,"material.yintfri",iMat,"1.0");
@@ -772,12 +828,28 @@ void SRFInit(InputFile * ifp,struct StateReference * _s, int iMat)
     _s->Tmelt0   = GetValueDk(ifp,"material.SimonT0",iMat,"933.0");
     _s->Tfrac    = GetValueDk(ifp,"material.OhnakaXi",iMat,"0.5");
 
+    // liquids temperature parameters
+    _s->PolyLiq  = GetValueIk(ifp,"material.PolyLiq", iMat,"0");
+    _s->Tlidc1   = GetValueDk(ifp,"material.Tlidc1" , iMat,"0.0");
+    _s->Tlidc2   = GetValueDk(ifp,"material.Tlidc2" , iMat,"0.0");
+    _s->Tlidc3   = GetValueDk(ifp,"material.Tlidc3" , iMat,"0.0");
+    // solidus temperature parameters
+    _s->PolySol  = GetValueIk(ifp,"material.PolySol", iMat,"0");
+    _s->Tsolc1   = GetValueDk(ifp,"material.Tsolc1" , iMat,"0.0");
+    _s->Tsolc2   = GetValueDk(ifp,"material.Tsolc2" , iMat,"0.0");
+    _s->Tsolc3   = GetValueDk(ifp,"material.Tsolc3" , iMat,"0.0");
+
     char StrengthModel[100];
     GetValueSk(ifp,"material.yshear",StrengthModel,iMat,"SimpleRock");
     if((0==strcasecmp(StrengthModel,"JohnsonCook2"))||(0==strcasecmp(StrengthModel,"JohnsonCook1")))
     {
         _s->minPdam = _s->minPint = GetValueDk(ifp,"material.JcminP",iMat,"-2.44e9");
         _s->JCMaxPlastic = GetValueDk(ifp,"material.JcMaxPlastic",iMat,"10.0");
+        if(0 == myrank)
+        {
+            fprintf(stdout, "%s: strength of material[%d] is %s\n", __func__, iMat, StrengthModel);
+            fprintf(stdout,"A=%e,B=%e,N=%e,C=%e,M=%e,Tref=%f\n",_s->JCA,_s->JCB,_s->JCN,_s->JCC,_s->JCM,_s->JCTREF);
+        }
     }
 }
 
@@ -854,6 +926,13 @@ void SetBC(InputFile * ifp, struct Mesh * _mesh)
 
         ice->Tr[0] = tmpTr[ib];
         ice->CEType = tmpType[ib];
+
+        // clear body force on normal direction
+        for(int j=0;j<VPE;++j)
+        {
+            double vLineDotBf2 = Dot(vLine, dest->NeV[j]->BodyF);
+            ScalerAddition(dest->NeV[j]->BodyF, vLine, -vLineDotBf2);
+        }
     }
 }
 
@@ -874,7 +953,6 @@ void SetDamping(struct MeshInfo * _minfo, struct Mesh * _mesh)
         }
     }
 }
-
 
 void InitMeshANEOS(InputFile * ifp, struct Mesh * _mesh, struct ANEOSTable * ATB)
 {
@@ -1081,9 +1159,241 @@ void InitMeshANEOS(InputFile * ifp, struct Mesh * _mesh, struct ANEOSTable * ATB
     free(profId);
 }
 
-
-void InitMesh(InputFile * ifp, struct Mesh * _mesh, struct EosTable * _etb)
+void InitMesh(InputFile * ifp, struct Mesh * _mesh, struct EosTable * _etb, struct StateReference * _sref)
 {
+    /*
+     * set initial material distribution in SALEc.inp
+     * support different types of eos
+     * use temperature initialization method from planet version
+     */
+
+    int myrank;
+    MPI_Comm_rank(SALEC_CART_COMM,&myrank);
+
+    char Material[NMT][MaxStrLen];
+    int NumMaterial = GetValueI(ifp,"material.nm","1.0");
+    for(int iMat=0;iMat<NumMaterial;iMat++)
+    {
+        GetValueSk(ifp,"material.name",Material[iMat],iMat,"dunite_");
+    }
+
+    // process the projectile
+    double speed = GetValueDk(ifp,"projectile.velocity",0,"1.0e4");
+    double theta = M_PI/180.0*GetValueDk(ifp,"projectile.velocity",1,"0.0");
+    double phi   = M_PI/180.0*GetValueDk(ifp,"projectile.velocity",2,"0.0");
+    double Radiu = GetValueD(ifp,"projectile.radiu","7000.0");
+    double ImpactVelocity[DIM],Center[DIM];
+    ImpactVelocity[X] = speed * sin(theta) * cos(phi);
+    ImpactVelocity[Y] = speed * sin(theta) * sin(phi);
+    ImpactVelocity[Z] = speed * cos(theta);
+    Center[X] = GetValueDk(ifp,"projectile.center",X,"0.0");
+    Center[Y] = GetValueDk(ifp,"projectile.center",Y,"0.0");
+    Center[Z] = GetValueDk(ifp,"projectile.center",Z,"0.0");
+
+    char iName[MaxStrLen],pDamage[MaxStrLen],pTem[MaxStrLen],pPre[MaxStrLen],pDen[MaxStrLen];
+    double iDamage=0.0,iTem=0.0,iPre=0.0,iDen=0.0,iEng=0.0;
+    GetValueS(ifp,"projectile.material",iName,"dunite_");
+    GetValueSk(ifp,"projectile.damage",pDamage,0,"unknown");
+    GetValueSk(ifp,"projectile.temperature",pTem,0,"unknown");
+    GetValueSk(ifp,"projectile.pressure",pPre,0,"unknown");
+    GetValueSk(ifp,"projectile.density",pDen,0,"unknown");
+
+    int IdImpact = 1;
+    for(int iMat=1;iMat<NumMaterial;iMat++)
+    {
+        if(0==strcasecmp(iName,Material[iMat])) IdImpact = iMat;
+    }
+    if(0==strcasecmp(pDamage,"const"))
+        iDamage = GetValueDk(ifp,"projectile.damge",1,"1.0");
+    if((0==strcasecmp(pTem,"const")) && (0==strcasecmp(pPre,"const")) && (0==strcasecmp(pDen,"derived")))
+    {
+        iPre = GetValueDk(ifp,"projectile.pressure",1,"1.0");
+        iTem = GetValueDk(ifp,"projectile.temperature",1,"1.0");
+        iDen = _etb[IdImpact].InterpolateTP(_etb + IdImpact, iTem, iPre, -1);
+        iEng = _etb[IdImpact].InterpolateTP(_etb + IdImpact, iTem, iPre, 0);
+    }
+
+    double toplevel = GetValueD(ifp,"target.toplevel","-1000.0");
+
+    // BuildTargetProf assume the gravity is varied with depth
+    // in the flat model we need const gravity
+    planet_profile * _prof = BuildFlatTargetProf(ifp,_etb,_sref);
+    if(myrank == 1)
+    {
+        FILE * fp = fopen("txt/profile.txt","w");
+        WriteTargetProfile_All(fp,_prof,_sref,NULL);
+        fclose(fp);
+    }
+
+    // double toplevel = GetValueD(ifp,"target.toplevel","-1000.0");
+    double topnorm[3] = {0.,0.,1.};
+    char TopTypeOpt[MaxStrLen];
+    GetValueSk(ifp,"target.toptype",TopTypeOpt,0,"plane");
+
+    if(0== strcasecmp(TopTypeOpt,"plane"))
+    {
+        /*
+         * do nothing, as special case of slope (theta, phi) = 0
+         */
+        for(int i=0;i<_mesh->ne;i++)
+        {
+            struct Element * ie = _mesh->Elements + i;
+            double * VibVelocity = ie->PsiL3 + 8;
+            ie->Viscosity = 0.0;
+            ZeroEx(ie->VOF,NMT);
+            ZeroEx(ie->sPsiL3,NPSI);
+            ZeroEx(ie->PsiL3,NPSI);
+            ie->VibPressure = *VibVelocity = 0.0;
+            for(int k=0;k<NMT;k++)
+            {
+                ZeroEx(ie->PhiL3[k],NPHI);
+                ZeroEx(ie->sPhiL3[k],NPHI);
+                ie->PhiL3[k][0] = 1.0;
+            }
+            if(Distance(Center,ie->Center) <= Radiu)
+            {
+                ie->Temperature = iTem;
+                ie->Pressure = iPre;
+                ie->Density  = iDen;
+
+                ie->VOF[IdImpact] = 1.0;
+                ie->PhiL3[IdImpact][1] = iDen;
+                ie->PhiL3[IdImpact][2] = iEng;
+
+                ScalerMoveEx(ie->sPhiL3[IdImpact],ie->PhiL3[IdImpact],1.0,NPHI);
+                ie->Damage = ie->PsiL3[0] = iDamage;
+                ie->Mass = ie->Density * ie->Volume;
+                ie->sPsiL3[0] = ie->Mass*iDamage;
+                ScalerMove(ie->Momentum,ImpactVelocity,ie->Mass);
+            } else if(ie->Center[Z] < toplevel)
+            {
+                int dpz = (int) (Wind((toplevel - ie->Center[Z])/_prof->dz,0,_prof->n - 1));
+                dpz = (_prof->n - 1) - dpz;
+                CopyProfToE(_prof, dpz, ie);
+                Zero(ie->Momentum);
+            } else
+            {
+                ie->Temperature = 0.0;
+                ie->Pressure    = 0.0;
+                ie->Density     = 0.0;
+                ie->VOF[0] = 1.0;
+                ie->sPhiL3[0][0] = 1.0;
+                ie->Mass = 0.0;
+                Zero(ie->Momentum);
+            }
+        }
+    } else if(0 == strcasecmp(TopTypeOpt,"slope"))
+    {
+        /*
+         * set state on a slope, (stress, pressure) should loaded from check point.
+         * theta,phi (degree)
+         */
+        double SlopeTheta = M_PI/180.0*GetValueDk(ifp,"target.toptype",1,"0.0");
+        double SlopePhi   = M_PI/180.0*GetValueDk(ifp,"target.toptype",2,"0.0");
+        topnorm[0] = sin(SlopeTheta)* cos(SlopePhi);
+        topnorm[1] = sin(SlopeTheta)* sin(SlopePhi);
+        topnorm[2] = cos(SlopeTheta);
+
+        for(int i=0;i<_mesh->ne;i++)
+        {
+            struct Element * ie = _mesh->Elements + i;
+            double * VibVelocity = ie->PsiL3 + 8;
+            double topDistance = Dot(topnorm,ie->Center);
+            ie->Viscosity = 0.0;
+            ZeroEx(ie->VOF,NMT);
+            ZeroEx(ie->sPsiL3,NPSI);
+            ZeroEx(ie->PsiL3,NPSI);
+            ie->VibPressure = *VibVelocity = 0.0;
+            for(int k=0;k<NMT;k++)
+            {
+                ZeroEx(ie->PhiL3[k],NPHI);
+                ZeroEx(ie->sPhiL3[k],NPHI);
+                ie->PhiL3[k][0] = 1.0;
+            }
+            if(Distance(Center,ie->Center) <= Radiu)
+            {
+                ie->Temperature = iTem;
+                ie->Pressure = iPre;
+                ie->Density  = iDen;
+
+                ie->VOF[IdImpact] = 1.0;
+                ie->PhiL3[IdImpact][1] = iDen;
+                ie->PhiL3[IdImpact][2] = iEng;
+
+                ScalerMoveEx(ie->sPhiL3[IdImpact],ie->PhiL3[IdImpact],1.0,NPHI);
+                ie->Damage = ie->PsiL3[0] = iDamage;
+                ie->Mass = ie->Density * ie->Volume;
+                ie->sPsiL3[0] = ie->Mass*iDamage;
+                ScalerMove(ie->Momentum,ImpactVelocity,ie->Mass);
+            } else if(topDistance < toplevel)
+            {
+                int dpz = (int) (Wind((toplevel - topDistance)/_prof->dz,0,_prof->n-1));
+                dpz = (_prof->n - 1) - dpz;
+                CopyProfToE(_prof, dpz, ie);
+                Zero(ie->Momentum);
+            } else
+            {
+                ie->Temperature = 0.0;
+                ie->Pressure    = 0.0;
+                ie->Density     = 0.0;
+                ie->VOF[0] = 1.0;
+                ie->sPhiL3[0][0] = 1.0;
+                ie->Mass = 0.0;
+                Zero(ie->Momentum);
+            }
+        }
+
+    } else
+    {
+        fprintf(stdout,"unknown top-type [%s]\n",TopTypeOpt);
+        exit(0);
+    }
+
+    char TarGrav[MaxStrLen];
+    double gravity = 0.0;
+    GetValueSk(ifp,"condition.gravity",TarGrav,0,"unknown");
+    if(0==strcasecmp(TarGrav,"const"))
+    {
+        gravity = GetValueDk(ifp,"condition.gravity",1,"-9.8");
+    } else
+    {
+        fprintf(stdout,"error gravity type:%s\n",TarGrav);
+    }
+
+    // initialization of vertex
+    for(int k=0;k<_mesh->nv;k++)
+    {
+        struct Vertex * iv = _mesh->Vertexes + k;
+        Zero(iv->BodyF);
+        iv->BodyF[Z] = gravity;
+    }
+
+    for(int k=0;k<_mesh->ndb;k++)
+    {
+        struct Boundary * ib = _mesh->DomainB[k];
+        ib->dMass = 0.0;
+        Zero(ib->dMomentum);
+        ZeroEx(ib->dPsi,NPSI);
+        for(int j=0;j<NMT;j++)
+        {
+            ZeroEx(ib->dPhi[j],NPHI);
+        }
+    }
+
+    UnAllocatePlanetProfile(_prof);
+}
+
+void InitMeshMixed(InputFile * ifp, struct Mesh * _mesh, struct EosTable * _etb)
+{
+    /*
+     * set initial material distribution in SALEc.inp
+     * support different types of eos
+     * the temperature must be const
+     * (deprecated 15/01/2025 huachengli)
+     */
+    int myrank;
+    MPI_Comm_rank(SALEC_CART_COMM,&myrank);
+
     char Material[NMT][MaxStrLen];
     int NumMaterial = GetValueI(ifp,"material.nm","1.0");
     for(int iMat=0;iMat<NumMaterial;iMat++)
@@ -1127,7 +1437,7 @@ void InitMesh(InputFile * ifp, struct Mesh * _mesh, struct EosTable * _etb)
     }
 
     int NumTarget = GetValueI(ifp,"target.number","1");
-    double dz = 0.5*GetValueD(ifp,"mesh.dz","1.0e4");
+    double dz = 0.25*GetValueD(ifp,"mesh.dz","1.0e4");
     double depth[NMT],SumDepth;
     int IdTarget[NMT];
     for(int iTar=0;iTar<NumTarget;iTar++)
@@ -1147,6 +1457,32 @@ void InitMesh(InputFile * ifp, struct Mesh * _mesh, struct EosTable * _etb)
         }
         depth[iTar] = GetValueDk(ifp,"target.depth",iTar,"0.0");
         SumDepth += depth[iTar];
+    }
+
+    double toplevel = GetValueD(ifp,"target.toplevel","-1000.0");
+    double meshDepth = toplevel - _mesh->X0[Z];
+
+    // fprintf(stdout,"mesh depth is %10.5e\n",meshDepth);
+
+    if((SumDepth - depth[NumTarget - 1]) > meshDepth)
+    {
+        fprintf(stdout,"%s(%d): depth of mesh (%10.5e) is not enough for target (%10.5e)\n",meshDepth,SumDepth);
+        fflush(stdout);
+        exit(0);
+    }
+    else
+    {
+        double deltaDepth = meshDepth - (SumDepth - depth[NumTarget - 1]) + 32.0*dz;
+        double oldDepth = depth[NumTarget - 1];
+        SumDepth -= depth[NumTarget - 1];
+        depth[NumTarget - 1] = deltaDepth;
+        SumDepth += deltaDepth;
+        if(myrank == 0)
+        {
+            fprintf(stdout,"depth of layer(%d):%s is changed (%10.5e => %10.5e)\n",
+            NumTarget-1,Material[IdTarget[NumTarget-1]],oldDepth,deltaDepth);
+            fflush(stdout);
+        }
     }
 
     int ProfileLen = (int)(SumDepth/dz) + 1;
@@ -1202,10 +1538,9 @@ void InitMesh(InputFile * ifp, struct Mesh * _mesh, struct EosTable * _etb)
             }
             lnd += iInterval-1;
         }
-
     }
 
-    double toplevel = GetValueD(ifp,"target.toplevel","-1000.0");
+    // double toplevel = GetValueD(ifp,"target.toplevel","-1000.0");
     double topnorm[3] = {0.,0.,1.};
     char TopTypeOpt[MaxStrLen];
     GetValueSk(ifp,"target.toptype",TopTypeOpt,0,"plane");
@@ -1273,7 +1608,6 @@ void InitMesh(InputFile * ifp, struct Mesh * _mesh, struct EosTable * _etb)
                 Zero(ie->Momentum);
             }
         }
-
     } else if(0 == strcasecmp(TopTypeOpt,"slope"))
     {
         /*
@@ -1518,6 +1852,7 @@ void EosInit(struct MeshInfo * _minfo, struct EosTable * _etb, struct StateRefer
     {
         struct EosTable * ketb = _etb + k;
         struct StateReference * ksrf = _srf + k;
+        ksrf->MaterialId = k;
         if(0==strcasecmp("aneos",_minfo->EosType[k]))
         {
             ketb->_atb = (struct ANEOSTable *) malloc(sizeof(struct ANEOSTable));
